@@ -3,27 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
-	"html"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"route"
 )
 
 const listenerPort = ":8080"
 
 func main() {
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
-	})
-
-	http.HandleFunc("/hi", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hi")
-	})
-
 	server := &http.Server{
-		Addr: listenerPort,
+		Addr:    listenerPort,
+		Handler: route.RegisterRoutes(),
 	}
 
 	errChan := make(chan error, 1)
