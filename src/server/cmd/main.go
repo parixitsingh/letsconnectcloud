@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"route"
+	"server/filemanager"
 )
 
 const listenerPort = ":8080"
@@ -16,7 +16,7 @@ const listenerPort = ":8080"
 func main() {
 	server := &http.Server{
 		Addr:    listenerPort,
-		Handler: route.RegisterRoutes(),
+		Handler: filemanager.Routes(),
 	}
 
 	errChan := make(chan error, 1)
