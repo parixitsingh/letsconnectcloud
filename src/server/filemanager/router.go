@@ -2,6 +2,7 @@ package filemanager
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -24,18 +25,21 @@ type controller struct {
 func (ctr controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	res, err := ctr.handler.ServeHTTP(r)
 	if err != nil {
+		fmt.Printf("error occured from serveHTTP : %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	data, err := json.Marshal(res)
 	if err != nil {
+		fmt.Printf("error occured from marshal : %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(data); err != nil {
+		fmt.Printf("error occured from write : %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

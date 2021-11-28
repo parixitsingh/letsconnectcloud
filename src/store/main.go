@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 )
 
 /*
@@ -34,6 +36,11 @@ const (
 	baseURL = "http://localhost:8080/"
 )
 
+type file struct {
+	Name    string `json:"name"`
+	Content []byte `json:"content"`
+}
+
 type store struct {
 	client  *http.Client
 	command string
@@ -56,32 +63,19 @@ func newStore() *store {
 }
 
 func main() {
+
+	// creating new store
 	store := newStore()
 
 	switch store.command {
 	case LS:
 		store.listFiles()
 	case ADD:
-		response, err := store.addFiles()
-		if err != nil {
-			fmt.Printf("error occured while adding the files %v", err)
-			os.Exit(1)
-		}
-		fmt.Println(response)
-	// case "update":
-	// 	response, err := updateFiles(httpClient, args[1:])
-	// 	if err != nil {
-	// 		fmt.Printf("error occured while updating the files %v", err)
-	// 		os.Exit(1)
-	// 	}
-	// 	fmt.Println(response)
-	// case "rm":
-	// 	response, err := removeFiles(httpClient, args[1:])
-	// 	if err != nil {
-	// 		fmt.Printf("error occured while removing the files %v", err)
-	// 		os.Exit(1)
-	// 	}
-	// 	fmt.Println(response)
+		store.addFiles()
+	case "update":
+		store.updateFiles()
+	case "rm":
+		store.removeFile()
 	// case "wc":
 	// 	response, err := wordCounts(httpClient)
 	// 	if err != nil {
@@ -102,12 +96,7 @@ func main() {
 }
 
 func (st *store) listFiles() {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"listfiles", nil)
-	if err != nil {
-		fmt.Printf("not able to fetch files due following error : %v", err)
-	}
-
-	bodyBytes, err := st.executeHTTPRequest(req)
+	bodyBytes, err := st.createAndExecuteHTTPRequest(http.MethodGet, "listfiles", nil)
 	if err != nil {
 		fmt.Printf("error occured while fetching the files : %v", err)
 	}
@@ -126,41 +115,121 @@ func (st *store) listFiles() {
 	}
 }
 
-func (st *store) addFiles() (interface{}, error) {
+func (st *store) addFiles() {
 	if len(st.options) == 0 {
-		return "no files are specified", nil
+		fmt.Println("no files are specified")
 	}
-	return "add files called", nil
+
+	files := []file{}
+
+	for _, v := range st.options {
+		name, content, err := st.getFileContent(v)
+		if err != nil {
+			fmt.Printf("error occured while reading the files %v", err)
+			os.Exit(1)
+		}
+		files = append(files, file{
+			Name:    name,
+			Content: content,
+		})
+	}
+
+	_, err := st.createAndExecuteHTTPRequest(http.MethodPost, "addfiles", files)
+	if err != nil {
+		fmt.Printf("error occured while adding the files :%v", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("files added successfully")
 }
 
-// func updateFiles(_ *http.Client, files []string) (interface{}, error) {
-// 	if len(files) == 0 {
-// 		return "no files are specified", nil
-// 	}
-// 	return "update files called", nil
-// }
+func (st *store) updateFiles() {
+	if len(st.options) == 0 {
+		fmt.Println("no files are specified")
+	}
 
-// func removeFiles(*http.Client,files []string) (interface{}, error) {
-// 	if len(files) == 0 {
-// 		return "no files are specified", nil
-// 	}
-// 	return "remove files called", nil
-// }
+	files := []file{}
 
-// func wordCounts(*http.Client) (interface{}, error) {
-// 	return "word counts called", nil
-// }
+	for _, v := range st.options {
+		name, content, err := st.getFileContent(v)
+		if err != nil {
+			fmt.Printf("error occured while reading the files %v", err)
+			os.Exit(1)
+		}
+		files = append(files, file{
+			Name:    name,
+			Content: content,
+		})
+	}
 
-// func frequencyWords(*http.Client) (interface{}, error) {
-// 	return "frequency words called", nil
-// }
+	_, err := st.createAndExecuteHTTPRequest(http.MethodPut, "updatefiles", files)
+	if err != nil {
+		fmt.Printf("error occured while updating the files :%v", err)
+		os.Exit(1)
+	}
 
-/*
-Q. In update and remove should it be single or multiple files?
-Q.
-*/
+	fmt.Println("files updated successfully")
+}
 
-func (st *store) executeHTTPRequest(req *http.Request) ([]byte, error) {
+func (st *store) removeFile() {
+	if len(st.options) == 0 {
+		fmt.Println("no files are specified")
+	}
+
+	if len(st.options) > 1 {
+		fmt.Println("more than one files are specified")
+	}
+
+	fileStructure := strings.Split(st.options[0], "/")
+	_, err := st.createAndExecuteHTTPRequest(http.MethodDelete, "removefile", &file{
+		Name: fileStructure[len(fileStructure)-1],
+	})
+	if err != nil {
+		fmt.Printf("error occured while deleting the file :%v", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("file deleted successfully")
+}
+
+func (st *store) getFileContent(fPath string) (string, []byte, error) {
+	fileStructure := strings.Split(fPath, "/")
+	if fileStructure[0] == fPath {
+		fileStructure = strings.Split(fPath, `\`)
+	}
+	fileContent, err := ioutil.ReadFile(fPath)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return fileStructure[len(fileStructure)-1], fileContent, nil
+}
+
+func wordCounts(*http.Client) (interface{}, error) {
+	return "word counts called", nil
+}
+
+func frequencyWords(*http.Client) (interface{}, error) {
+	return "frequency words called", nil
+}
+
+func (st *store) createAndExecuteHTTPRequest(method, url string, reqBody interface{}) ([]byte, error) {
+	reqUrl := baseURL + url
+	requestBody := []byte{}
+	var err error
+
+	if reqBody != nil {
+		requestBody, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("error while marshaling the request body with %w", err)
+		}
+	}
+
+	req, err := http.NewRequest(method, reqUrl, bytes.NewReader(requestBody))
+	if err != nil {
+		return nil, err
+	}
+
 	res, err := st.client.Do(req)
 	if err != nil {
 		return nil, err

@@ -8,5 +8,7 @@ func Routes() http.Handler {
 	fileManager := NewFileManager()
 	router.Register(http.MethodGet, "/listfiles", HandlerFunc(fileManager.ListFiles))
 	router.Register(http.MethodPost, "/addfiles", HandlerFunc(fileManager.AddFiles))
+	router.Register(http.MethodPut, "/updatefiles", HandlerFunc(fileManager.UpdateFiles))
+	router.Register(http.MethodDelete, "/removefile", HandlerFunc(fileManager.RemoveFile))
 	return router.RouteHandler
 }
