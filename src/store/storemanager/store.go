@@ -1,4 +1,4 @@
-package main
+package storemanager
 
 import (
 	"bytes"
@@ -7,47 +7,53 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
-/*
-command structure
+// StoreManager is an interface which is exposing functionalities
+type StoreManager interface {
+	Command() string
+	ListFiles()
+	AddFiles()
+	UpdateFiles()
+	RemoveFile()
+	WordCounts()
+	WordFrequency()
+}
 
-store [command_type] [values]
+// wordCountResponse is response when counting words
+type wordCountResponse struct {
+	Count int `json:"count"`
+}
 
-for eg:-
-store add filename1 filename2
+// wordFrequencyResponse is response when frequent words counted
+type wordFrequencyResponse struct {
+	Words []string `json:"words"`
+}
 
-command_type is add
-values are filenames {filename1, filename2}
+// wordFrequencyRequest is request when frequent words counted
+type wordFrequencyRequest struct {
+	Limit int    `json:"limit"`
+	Order string `json:"order"`
+}
 
-*/
-
-const (
-	LS        string = "ls"
-	ADD       string = "add"
-	UPDATE    string = "update"
-	RM        string = "rm"
-	WC        string = "wc"
-	FREQWORDS string = "freq-words"
-)
-
-const (
-	baseURL = "http://localhost:8080/"
-)
-
+// file is representing file details name and content
 type file struct {
 	Name    string `json:"name"`
 	Content []byte `json:"content"`
 }
 
+// store is implementing all the function that executes on different commands
 type store struct {
 	client  *http.Client
 	command string
 	options []string
+	baseURL string
 }
 
-func newStore() *store {
+// NewStore is constructor to create store instance
+func NewStore(baseURL string) StoreManager {
 	// reading the args
 	// skipping the 0 index as it gives program
 	args := os.Args[1:]
@@ -59,43 +65,15 @@ func newStore() *store {
 		client:  &http.Client{},
 		command: args[0],
 		options: args[1:],
+		baseURL: baseURL,
 	}
 }
 
-func main() {
-
-	// creating new store
-	store := newStore()
-
-	switch store.command {
-	case LS:
-		store.listFiles()
-	case ADD:
-		store.addFiles()
-	case "update":
-		store.updateFiles()
-	case "rm":
-		store.removeFile()
-	// case "wc":
-	// 	response, err := wordCounts(httpClient)
-	// 	if err != nil {
-	// 		fmt.Printf("error occured while counting the words %v", err)
-	// 		os.Exit(1)
-	// 	}
-	// 	fmt.Println(response)
-	// case "freq-words":
-	// 	response, err := frequencyWords(httpClient)
-	// 	if err != nil {
-	// 		fmt.Printf("error occured while counting the words frequencies %v", err)
-	// 		os.Exit(1)
-	// 	}
-	// 	fmt.Println(response)
-	default:
-		fmt.Println(fmt.Errorf("command \"%s\" is not valid", store.command))
-	}
+func (st *store) Command() string {
+	return st.command
 }
 
-func (st *store) listFiles() {
+func (st *store) ListFiles() {
 	bodyBytes, err := st.createAndExecuteHTTPRequest(http.MethodGet, "listfiles", nil)
 	if err != nil {
 		fmt.Printf("error occured while fetching the files : %v", err)
@@ -115,7 +93,7 @@ func (st *store) listFiles() {
 	}
 }
 
-func (st *store) addFiles() {
+func (st *store) AddFiles() {
 	if len(st.options) == 0 {
 		fmt.Println("no files are specified")
 	}
@@ -143,7 +121,7 @@ func (st *store) addFiles() {
 	fmt.Println("files added successfully")
 }
 
-func (st *store) updateFiles() {
+func (st *store) UpdateFiles() {
 	if len(st.options) == 0 {
 		fmt.Println("no files are specified")
 	}
@@ -171,7 +149,7 @@ func (st *store) updateFiles() {
 	fmt.Println("files updated successfully")
 }
 
-func (st *store) removeFile() {
+func (st *store) RemoveFile() {
 	if len(st.options) == 0 {
 		fmt.Println("no files are specified")
 	}
@@ -192,6 +170,69 @@ func (st *store) removeFile() {
 	fmt.Println("file deleted successfully")
 }
 
+func (st *store) WordCounts() {
+	bodyBytes, err := st.createAndExecuteHTTPRequest(http.MethodGet, "wordscount", nil)
+	if err != nil {
+		fmt.Printf("error occured while getting the words count : %v", err)
+	}
+
+	if len(bodyBytes) == 0 {
+		fmt.Println("no files exist on server")
+	}
+
+	wordCountResponse := &wordCountResponse{}
+
+	if err := json.Unmarshal(bodyBytes, &wordCountResponse); err != nil {
+		fmt.Println("error while reading the response from server")
+	}
+
+	fmt.Printf("Total words are %v", wordCountResponse.Count)
+}
+
+func (st *store) WordFrequency() {
+	wordFrequency := &wordFrequencyRequest{
+		Limit: 10,
+		Order: "asc",
+	}
+
+	for i, v := range st.options {
+		if strings.HasPrefix(v, "--limit") || strings.HasPrefix(v, "-n") && i < len(st.options)-1 {
+			limit, err := strconv.Atoi(st.options[i+1])
+			if err != nil {
+				fmt.Printf("invalid limit provided %v", st.options[i+1])
+				os.Exit(1)
+			}
+			wordFrequency.Limit = limit
+		}
+
+		if strings.HasPrefix(v, "--order=") && i < len(st.options) {
+			order := strings.TrimPrefix(st.options[i], "--order=")
+			if order != "asc" && order != "dsc" {
+				fmt.Printf("invalid order provided %v", st.options[i])
+				os.Exit(1)
+			}
+			wordFrequency.Order = order
+		}
+	}
+
+	bodyBytes, err := st.createAndExecuteHTTPRequest(http.MethodGet, "wordsfrequency", wordFrequency)
+	if err != nil {
+		fmt.Printf("error occured while getting the words count : %v", err)
+	}
+
+	if len(bodyBytes) == 0 {
+		fmt.Println("no files exist on server")
+	}
+
+	wordFrequencyResponse := &wordFrequencyResponse{}
+
+	if err := json.Unmarshal(bodyBytes, &wordFrequencyResponse); err != nil {
+		fmt.Println("error while reading the response from server")
+	}
+
+	fmt.Printf("words are %v", wordFrequencyResponse.Words)
+}
+
 func (st *store) getFileContent(fPath string) (string, []byte, error) {
 	fileStructure := strings.Split(fPath, "/")
 	if fileStructure[0] == fPath {
@@ -205,16 +246,8 @@ func (st *store) getFileContent(fPath string) (string, []byte, error) {
 	return fileStructure[len(fileStructure)-1], fileContent, nil
 }
 
-func wordCounts(*http.Client) (interface{}, error) {
-	return "word counts called", nil
-}
-
-func frequencyWords(*http.Client) (interface{}, error) {
-	return "frequency words called", nil
-}
-
 func (st *store) createAndExecuteHTTPRequest(method, url string, reqBody interface{}) ([]byte, error) {
-	reqUrl := baseURL + url
+	reqUrl := st.baseURL + url
 	requestBody := []byte{}
 	var err error
 

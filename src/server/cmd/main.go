@@ -11,9 +11,11 @@ import (
 	"server/filemanager"
 )
 
+// listenerPort is the port on which store api are hosted
 const listenerPort = ":8080"
 
 func main() {
+	// server is created
 	server := &http.Server{
 		Addr:    listenerPort,
 		Handler: filemanager.Routes(),
@@ -21,6 +23,7 @@ func main() {
 
 	errChan := make(chan error, 1)
 	go func() {
+		// listening on the server
 		errChan <- server.ListenAndServe()
 	}()
 
@@ -35,6 +38,7 @@ func main() {
 		}
 		<-errChan
 	case <-errChan:
+		// In case of err from server exiting
 		os.Exit(1)
 	}
 }
