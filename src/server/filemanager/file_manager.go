@@ -95,7 +95,7 @@ func (fm *fileManager) AddFiles(r *http.Request) (interface{}, error) {
 			return nil, err
 		}
 	}
-	return files, nil
+	return nil, nil
 }
 
 // UpdateFiles is updating/creating files coming in the request
@@ -111,7 +111,7 @@ func (fm *fileManager) UpdateFiles(r *http.Request) (interface{}, error) {
 			return nil, err
 		}
 	}
-	return files, nil
+	return nil, nil
 }
 
 // RemoveFile is deleting the file coming in the request
